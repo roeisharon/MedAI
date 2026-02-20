@@ -1,0 +1,32 @@
+services:
+  backend:
+    build: ./backend
+    container_name: docbot_backend
+    ports:
+      - "8000:8000"      # also exposed directly for Swagger UI access
+    volumes:
+      - chroma_data:/app/chroma_db
+      - sqlite_data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    container_name: docbot_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+# Named volumes — data persists across restarts and docker compose down
+volumes:
+  chroma_data:
+  sqlite_data:

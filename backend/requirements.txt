@@ -1,0 +1,23 @@
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+pydantic==2.10.3
+
+# LLM + embeddings
+langchain==0.3.13
+langchain-openai==0.2.14
+langchain-community==0.3.13
+openai==1.58.1
+
+# Vector store
+chromadb==0.5.23
+
+# PDF processing
+pypdf==5.1.0
+
+# Config
+python-dotenv==1.0.1
+
+# Optional: error monitoring (remove if not using Sentry)
+sentry-sdk==2.19.2
