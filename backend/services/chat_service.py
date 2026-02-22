@@ -122,6 +122,9 @@ def _parse_response(raw: str) -> dict:
     if not answer:
         clean = re.sub(r"<(answer|citations)>.*?</\1>", "", raw, flags=re.DOTALL).strip()
         answer = clean or raw.strip()
+    
+    # safety strip
+    answer = re.sub(r"</?(answer|citations)>", "", answer).strip()
 
     return {"answer": answer, "citations": citations}
 
@@ -235,7 +238,7 @@ async def answer_question(
 
     # 4. Retrieve relevant chunks
     with track_latency(log, "vector_search", ctx):
-        relevant = query_chunks(leaflet_id, search_query, n_results=8)
+        relevant = query_chunks(leaflet_id, search_query, n_results=12)
 
     if not relevant:
         log.info("No relevant chunks found", extra=ctx)

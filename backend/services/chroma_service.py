@@ -101,7 +101,7 @@ def _query_single(collection, embedder, query: str, leaflet_id: str, n_results: 
     ]
 
 
-def query_chunks(leaflet_id: str, question: str, n_results: int = 8) -> list[dict]:
+def query_chunks(leaflet_id: str, question: str, n_results: int = 12) -> list[dict]:
     """
     Multi-query retrieval: searches with the original question AND a
     keyword-stripped variant, merges and deduplicates by best score.
@@ -129,8 +129,19 @@ def query_chunks(leaflet_id: str, question: str, n_results: int = 8) -> list[dic
         # Keyword fallback
         # If the question contains specific terms, scan ALL chunks for exact
         # matches and inject them — embedding similarity alone misses these.
+        # also generate hebrew prefix variants
+
         question_words = [w for w in re.findall(r'[א-ת\w]{3,}', question) if len(w) >= 3]
-        if question_words:
+        hebrew_prefixes = ['ה', 'ו', 'ב', 'ל', 'מ', 'כ', 'ש', 'ו', 'מה', 'של', 'על']
+        expanded_words = set(question_words)
+        for word in question_words:
+            for prefix in hebrew_prefixes:
+                if word.startswith(prefix) and len(word) - len(prefix) >= 3:
+                    expanded_words.add(word[len(prefix):])
+            for prefix in hebrew_prefixes:
+                expanded_words.add(prefix + word)
+
+        if expanded_words:
             all_chunks = collection.get(
                 where={"leaflet_id": leaflet_id},
                 include=["documents", "metadatas"],

@@ -69,7 +69,7 @@ User question
 Embed question  →  ChromaDB cosine search (scoped to leaflet)
     │
     ▼
-Top-8 chunks + keyword fallback
+Top-12 chunks + keyword fallback
     │
     ▼
 Build prompt: system(grounding rules + chunks) + history + question
