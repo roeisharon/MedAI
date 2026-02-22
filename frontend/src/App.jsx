@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/layout/Layout.jsx";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
-import Monitoring from "./pages/Monitoring.jsx";
 
 export default function App() {
   const [activeChat, setActiveChat] = useState(null);
@@ -21,7 +20,6 @@ export default function App() {
               />
             }
           />
-          <Route path="monitoring" element={<Monitoring/>}/>
         </Routes>
       </Layout>
     </BrowserRouter>

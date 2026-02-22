@@ -6,11 +6,12 @@ import SidebarNav from "./sidebar/SidebarNav";
 import SidebarDisclaimer from "./sidebar/SidebarDisclaimer";
 import RecentChats from "./sidebar/RecentChats";
 
+
 const API = "/api";
 
-export default function Sidebar({ activeChatId, onChatSelect }) {
-  const location  = useLocation();
-  const navigate  = useNavigate();
+export default function Sidebar({ activeChatId, onChatSelect, isOpen, onClose }) {
+  const location   = useLocation();
+  const navigate   = useNavigate();
   const [chats, setChats] = useState([]);
   const isChatPage = location.pathname === "/chat";
 
@@ -26,11 +27,14 @@ export default function Sidebar({ activeChatId, onChatSelect }) {
 
   const handleSelect = (chat) => {
     onChatSelect?.(chat);
+    onClose?.();
     navigate("/chat");
   };
 
+  // Both + button and Chat nav item trigger new chat
   const handleNewChat = () => {
     onChatSelect?.(null);
+    onClose?.();
     navigate("/chat");
   };
 
@@ -53,24 +57,37 @@ export default function Sidebar({ activeChatId, onChatSelect }) {
       setChats((prev) => prev.filter((c) => c.id !== chatId));
       if (chatId === activeChatId) {
         onChatSelect?.(null);
+        onClose?.();
         navigate("/chat");
       }
     } catch { /* ignore */ }
   };
 
   return (
-    <aside className="fixed top-0 left-0 h-screen w-64 bg-white border-r border-gray-100 flex flex-col z-50">
-      <SidebarLogo />
-      <SidebarNav />
-      <RecentChats
-        chats={chats}
-        activeChatId={isChatPage ? activeChatId : null}
-        onSelect={handleSelect}
-        onNewChat={handleNewChat}
-        onRename={handleRename}
-        onDelete={handleDelete}
-      />
-      <SidebarDisclaimer />
-    </aside>
+    <>
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={onClose} />
+      )}
+
+      <aside className={`
+        fixed top-0 left-0 h-screen w-64 z-50
+        bg-white border-r border-gray-100 flex flex-col
+        transition-transform duration-300 ease-in-out
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        lg:translate-x-0
+      `}>
+        <SidebarLogo />
+        <SidebarNav onClose={onClose} onNewChat={handleNewChat} />
+        <RecentChats
+          chats={chats}
+          activeChatId={isChatPage ? activeChatId : null}
+          onSelect={handleSelect}
+          onNewChat={handleNewChat}
+          onRename={handleRename}
+          onDelete={handleDelete}
+        />
+        <SidebarDisclaimer />
+      </aside>
+    </>
   );
 }

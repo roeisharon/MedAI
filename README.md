@@ -11,9 +11,9 @@
 
 ## Demo
 
-| Upload a Leaflet | Ask Questions | Cited Answers | Monitoring |
-|---|---|---|---|
-| Drag & drop PDF | Hebrew & English | Verbatim quotes with page numbers | Live metrics dashboard |
+| Upload a Leaflet | Ask Questions | Cited Answers |
+|---|---|---|
+| Drag & drop PDF | Hebrew & English | Verbatim quotes with page numbers |
 
 ---
 
@@ -24,7 +24,6 @@
 - **Citations** — every answer includes verbatim quotes with page numbers, collapsible in the UI
 - **Conversation history** — multi-turn chat with context across follow-up questions
 - **Multiple sessions** — sidebar with rename, delete, and switch between past conversations
-- **Monitoring dashboard** — live latency, LLM usage, error tracking
 - **Privacy-first** — all data stays local; no PDF content sent to third-party storage
 - **Mobile responsive** — slide-in sidebar drawer on small screens
 
@@ -34,28 +33,28 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        Browser (React)                       │
-│  Sidebar │ Chat │ Home │ Monitoring                         │
+│                        Browser (React)                      │
+│  Sidebar │ Chat │ Home                                      │
 └──────────────────────┬──────────────────────────────────────┘
                        │ HTTP / REST
 ┌──────────────────────▼──────────────────────────────────────┐
-│                   FastAPI  (main.py)                         │
-│  Middleware: request_id · latency · structured JSON logs     │
-│  Error handlers: ChatbotError → structured JSON response     │
-└──────┬───────────────┬───────────────────┬──────────────────┘
-       │               │                   │
+│                   FastAPI  (main.py)                        │
+│  Middleware: request_id · latency · structured JSON logs    │
+│  Error handlers: ChatbotError → structured JSON response    │
+└──────┬───────────────┬──────────────────┬───────────────────┘
+       │               │                  │
 ┌──────▼──────┐ ┌──────▼──────┐  ┌────────▼────────┐
 │ pdf_service │ │chat_service │  │   db_service    │
 │             │ │             │  │                 │
 │ extract text│ │ RAG pipeline│  │ SQLite          │
-│ chunk text  │ │ intent detect│  │ chats + messages│
+│ chunk text  │ │intent detect│  │ chats + messages│
 │ embed store │ │ history mgmt│  │ citations JSON  │
 └──────┬──────┘ └──────┬──────┘  └─────────────────┘
        │               │
 ┌──────▼───────────────▼──────────────────────────────────────┐
-│                   chroma_service                             │
-│   ChromaDB (local)  ·  OpenAI text-embedding-3-small         │
-│   Multi-query retrieval  ·  Keyword fallback                 │
+│                   chroma_service                            │
+│   ChromaDB (local)  ·  OpenAI text-embedding-3-small        │
+│   Multi-query retrieval  ·  Keyword fallback                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -98,14 +97,13 @@ Persist to SQLite → return to frontend
 | Vector store | ChromaDB (local) | No cloud, privacy-first, cosine similarity |
 | PDF parsing | pypdf | Lightweight, per-page text extraction |
 | Database | SQLite (WAL mode) | Zero-config, local-first, persistent |
-| Observability | Custom + optional Sentry | JSON logs, in-memory metrics, request tracing |
+| Observability | Custom (JSON logs + /metrics) | Structured logs, in-memory metrics, request tracing |
 
 ### Frontend
 | Component | Technology |
 |---|---|
 | Framework | React 18 |
 | Styling | Tailwind CSS v4 |
-| Charts | Recharts |
 | Icons | Lucide React |
 | Routing | React Router v6 |
 | Build | Vite |
@@ -115,100 +113,147 @@ Persist to SQLite → return to frontend
 ## Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- OpenAI API key
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- An [OpenAI API key](https://platform.openai.com/api-keys)
 
-### Local Development
-
-**1. Clone the repository**
-```bash
-git clone https://github.com/your-username/medai.git
-cd medai
-```
-
-**2. Backend setup**
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-```
-
-**3. Start the backend**
-```bash
-uvicorn main:app --reload --port 8001
-```
-
-**4. Frontend setup**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-**5. Open the app**
-```
-http://localhost:3000
-```
-
-### Docker (Production)
-
-```bash
-cp backend/.env.example backend/.env
-# Add your OPENAI_API_KEY to backend/.env
-
-docker compose up --build
-```
-
-The app will be available at `http://localhost`.
+> No Python or Node.js installation required — Docker handles everything.
 
 ---
 
-## Project Structure
+### 🚀 First-Time Setup
 
+**1. Clone the repository**
+```bash
+git clone https://github.com/roeisharon/medai.git
+cd medai
 ```
-medai/
-├── backend/
-│   ├── main.py                  # FastAPI app, routes, middleware
-│   ├── errors.py                # Error catalog (ErrorCode enum + ChatbotError)
-│   ├── observability.py         # Logging, metrics, Sentry integration
-│   ├── requirements.txt
-│   ├── .env.example
-│   └── services/
-│       ├── pdf_service.py       # PDF ingestion pipeline
-│       ├── chroma_service.py    # Vector store operations
-│       ├── chat_service.py      # RAG pipeline + LLM
-│       └── db_service.py        # SQLite CRUD
-│
-└── frontend/
-    └── src/
-        ├── App.jsx              # Root — shared activeChat state
-        ├── pages/
-        │   ├── Home.jsx
-        │   ├── Chat.jsx         # Chat page entry point
-        │   └── Monitoring.jsx   # Metrics dashboard
-        └── components/
-            ├── layout/
-            │   └── Layout.jsx   # Sidebar + main area, mobile drawer
-            ├── sidebar/
-            │   ├── Sidebar.jsx        # State + API calls
-            │   ├── SidebarLogo.jsx
-            │   ├── SidebarNav.jsx
-            │   ├── RecentChats.jsx
-            │   ├── ChatRow.jsx        # Rename + delete per chat
-            │   └── SidebarDisclaimer.jsx
-            └── chat/
-                ├── Chat.jsx           # Orchestration + state
-                ├── UploadScreen.jsx   # PDF drop zone
-                ├── ChatHeader.jsx
-                ├── ChatInput.jsx
-                ├── Message.jsx        # Bubble + citations + copy
-                ├── Citation.jsx       # Collapsible citation block
-                └── CopyButton.jsx
+
+**2. Create your environment file**
+```bash
+touch .env
+```
+
+Open `.env` and add your OpenAI API key:
+```env
+OPENAI_API_KEY=sk-...your-key-here...
+```
+
+**3. Build and start everything**
+```bash
+docker compose up --build
+```
+
+This single command will:
+- Build the Python backend image and install all dependencies
+- Build the React frontend and compile it with nginx
+- Start both containers and wire them together
+- Wait for the backend to pass its health check before serving the frontend
+
+> ⏱ First build takes ~2–3 minutes (downloading base images + installing packages). Subsequent builds are much faster thanks to Docker layer caching.
+
+**4. Open the app**
+```
+http://localhost
+```
+
+The backend API is also directly accessible at `http://localhost:8000` (useful for Swagger docs at `http://localhost:8000/docs`).
+
+---
+
+### 🔄 Day-to-Day Usage (After First Build)
+
+**Start the system:**
+```bash
+docker compose up
+```
+
+**Stop the system:**
+```bash
+docker compose down
+```
+
+Your data (uploaded PDFs, chat history, vectors) is stored in Docker named volumes and **persists across restarts**. Starting and stopping does not lose any data.
+
+---
+
+### 🔧 Useful Commands
+
+**View live logs:**
+```bash
+# All containers
+docker compose logs -f
+
+# Backend only
+docker compose logs -f backend
+
+# Frontend only
+docker compose logs -f frontend
+```
+
+**Check container status:**
+```bash
+docker compose ps
+# Both containers should show "running" and backend should show "(healthy)"
+```
+
+**Verify the backend is healthy:**
+```bash
+curl http://localhost:8000/health
+# Expected: {"status": "ok"}
+```
+
+**View live metrics:**
+```bash
+curl http://localhost:8000/metrics
+```
+
+**Rebuild after code changes:**
+```bash
+docker compose up --build
+```
+
+---
+
+### 🗑 Data Management
+
+**Reset all data** (wipes all chats, messages, and uploaded PDFs):
+```bash
+docker compose down -v
+```
+> The `-v` flag removes the named volumes. Next `docker compose up` starts fresh.
+
+**Reset only and restart immediately:**
+```bash
+docker compose down -v && docker compose up
+```
+
+---
+
+### 🩺 Troubleshooting
+
+**Backend container exits immediately:**
+```bash
+docker compose logs backend
+# Usually means OPENAI_API_KEY is missing or invalid in .env
+```
+
+**Frontend shows "Could not reach the backend":**
+```bash
+docker compose ps
+# Check backend is healthy. If not: docker compose restart backend
+```
+
+**Port 80 already in use:**
+```bash
+# Edit docker-compose.yml and change "80:80" to e.g. "8080:80"
+# Then visit http://localhost:8080
+```
+
+**Full clean rebuild** (if something is broken and you want to start fresh):
+```bash
+docker compose down -v
+docker system prune -f
+docker compose up --build
 ```
 
 ---
@@ -249,21 +294,43 @@ curl -X POST http://localhost:8001/chats/{chat_id}/ask \
 }
 ```
 
-### Metrics snapshot
+---
+
+## Configuration
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OPENAI_API_KEY` | ✅ | — | OpenAI API key |
+| `LOG_LEVEL` | ❌ | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`) |
+
+---
+
+## Observability
+
+### Metrics Endpoint
+
+The system exposes a live metrics snapshot at:
+
+```
+GET http://localhost:8000/metrics
+```
 
 ```bash
-curl http://localhost:8001/metrics
+curl http://localhost:8000/metrics
 ```
 
 ```json
 {
   "uptime_seconds": 3600,
   "total_requests": 142,
+  "total_sessions": 4,
+  "questions_asked": 38,
   "llm_calls": 38,
   "llm_errors": 0,
   "pdf_uploads": 3,
   "errors_by_type": {},
   "latency_ms": {
+    "count": 142,
     "avg": 1243.5,
     "min": 12.1,
     "max": 9800.0,
@@ -272,44 +339,30 @@ curl http://localhost:8001/metrics
 }
 ```
 
----
+| Field | Description |
+|---|---|
+| `uptime_seconds` | Time since last server restart |
+| `total_sessions` | PDF uploads that created a new chat |
+| `questions_asked` | User questions submitted (key event) |
+| `llm_calls` | Total OpenAI API calls made |
+| `llm_errors` | Failed LLM calls |
+| `pdf_uploads` | Successfully processed PDFs |
+| `errors_by_type` | Count per error code (e.g. `llm_timeout`, `pdf_no_text`) |
+| `latency_ms.p95` | 95th percentile response time (available after 20+ requests) |
 
-## Configuration
+> Metrics are in-memory and reset on server restart. For persistence, point a scraper at this endpoint.
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `OPENAI_API_KEY` | ✅ | — | OpenAI API key |
-| `SENTRY_DSN` | ❌ | — | Sentry DSN for error tracking |
-| `LOG_LEVEL` | ❌ | `INFO` | Logging level |
-| `ENVIRONMENT` | ❌ | `development` | Used by Sentry |
+### Structured Logs
 
----
-
-## Observability
-
-All logs are structured JSON, compatible with any log aggregator:
+Every request emits structured JSON to stdout — readable in the terminal and compatible with any log aggregator:
 
 ```json
-{
-  "timestamp": "2026-02-20T14:32:11+00:00",
-  "level": "INFO",
-  "logger": "main",
-  "message": "Request completed",
-  "request_id": "a3f2c891",
-  "path": "/chats/abc/ask",
-  "status": 200,
-  "latency_ms": 1843.2
-}
+{"timestamp": "2026-02-20T14:32:11+00:00", "level": "INFO", "logger": "main", "message": "user_question", "event": "user_question", "request_id": "a3f2c891", "chat_id": "abc-123", "question": "מה תופעות הלוואי?", "question_len": 18, "history_turns": 2}
+{"timestamp": "2026-02-20T14:32:13+00:00", "level": "INFO", "logger": "chat_service", "message": "llm_call completed", "operation": "llm_call", "latency_ms": 1843.2, "request_id": "a3f2c891"}
+{"timestamp": "2026-02-20T14:32:13+00:00", "level": "INFO", "logger": "main", "message": "Request completed", "request_id": "a3f2c891", "status": 200, "latency_ms": 1901.5}
 ```
 
-**Per-operation latency** is tracked for:
-- `pdf_extract`, `pdf_chunk`, `pdf_embed_store`
-- `vector_search`, `llm_call`, `openai_embed_batch`
-
-**Optional integrations:**
-- **Sentry** — set `SENTRY_DSN` in `.env`
-- **Datadog / Loki / CloudWatch** — point at stdout, JSON is natively ingested
-- **OpenTelemetry** — architecture is trace-ready (`request_id` propagated through all layers)
+**Per-operation latency** is tracked for: `pdf_extract`, `pdf_chunk`, `pdf_embed_store`, `vector_search`, `llm_call`, `openai_embed_batch`
 
 ---
 

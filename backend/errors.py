@@ -1,6 +1,4 @@
 """
-errors.py
-─────────────────────────────────────────────────────────────────────────────
 Centralized error catalog for the Medical Leaflet Chatbot.
 
 Design goals:
@@ -20,27 +18,27 @@ from fastapi import HTTPException
 
 
 class ErrorCode(str, Enum):
-    # ── PDF / Upload errors ──────────────────────────────────────────────────
+    # PDF / Upload errors
     PDF_INVALID_FORMAT   = "pdf_invalid_format"
     PDF_NO_TEXT          = "pdf_no_text"
     PDF_EMPTY            = "pdf_empty"
     PDF_TOO_LARGE        = "pdf_too_large"
 
-    # ── Chat errors ──────────────────────────────────────────────────────────
+    # Chat errors
     CHAT_NOT_FOUND       = "chat_not_found"
     CHAT_EMPTY_QUESTION  = "chat_empty_question"
 
-    # ── LLM / OpenAI errors ──────────────────────────────────────────────────
+    # LLM / OpenAI errors 
     LLM_TIMEOUT          = "llm_timeout"
     LLM_RATE_LIMIT       = "llm_rate_limit"
     LLM_API_ERROR        = "llm_api_error"
     LLM_CONTEXT_TOO_LONG = "llm_context_too_long"
 
-    # ── Vector DB errors ─────────────────────────────────────────────────────
+    # Vector DB errors
     VECTOR_DB_ERROR      = "vector_db_error"
     LEAFLET_NOT_INDEXED  = "leaflet_not_indexed"
 
-    # ── Generic ──────────────────────────────────────────────────────────────
+    # Generic
     INTERNAL_ERROR       = "internal_error"
     SERVICE_UNAVAILABLE  = "service_unavailable"
 

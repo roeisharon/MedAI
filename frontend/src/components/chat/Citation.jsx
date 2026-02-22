@@ -12,7 +12,7 @@ export default function Citation({ citation, index }) {
     <div className="mt-2 bg-black/5 rounded-xl overflow-hidden text-xs">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex justify-between items-center px-3 py-2 font-medium hover:bg-black/5 transition-colors text-left"
+        className="w-full flex justify-between items-center px-3 py-2 font-small hover:bg-black/5 transition-colors text-left"
       >
         <span className="flex items-center gap-1.5">
           <LuPaperclip className="w-3 h-3" />

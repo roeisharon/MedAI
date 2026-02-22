@@ -1,6 +1,4 @@
 """
-observability.py
-─────────────────────────────────────────────────────────────────────────────
 Central observability layer for the Medical Leaflet Chatbot.
 
 Covers:
@@ -23,28 +21,10 @@ import os
 import traceback
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 from collections import defaultdict
 
-# ── Optional Sentry integration ──────────────────────────────────────────────
-# Set SENTRY_DSN in .env to enable. Safe no-op if not installed/configured.
-try:
-    import sentry_sdk
-    _sentry_dsn = os.getenv("SENTRY_DSN")
-    if _sentry_dsn:
-        sentry_sdk.init(
-            dsn=_sentry_dsn,
-            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.2")),
-            environment=os.getenv("ENVIRONMENT", "development"),
-        )
-        _sentry_enabled = True
-    else:
-        _sentry_enabled = False
-except ImportError:
-    _sentry_enabled = False
-
-
-# ── Structured JSON log formatter ────────────────────────────────────────────
+#Structured JSON log formatter
 
 class JSONFormatter(logging.Formatter):
     """
@@ -104,14 +84,14 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-# ── Request ID ───────────────────────────────────────────────────────────────
+#Request ID
 
 def new_request_id() -> str:
     """Generate a short unique request ID (first 8 chars of a UUID4)."""
     return str(uuid.uuid4())[:8]
 
 
-# ── Latency context manager ───────────────────────────────────────────────────
+#Latency context manager
 
 @contextmanager
 def track_latency(logger: logging.Logger, operation: str, extra: dict = None):
@@ -135,7 +115,7 @@ def track_latency(logger: logging.Logger, operation: str, extra: dict = None):
         )
 
 
-# ── In-memory usage counters ─────────────────────────────────────────────────
+#In-memory usage counters
 # These reset on server restart. For persistent metrics, push to Prometheus
 # or a time-series DB. Exposed via GET /metrics endpoint in main.py.
 
@@ -156,6 +136,7 @@ class UsageMetrics:
     def __init__(self):
         self.total_requests = 0
         self.total_sessions = 0
+        self.questions_asked = 0
         self.llm_calls = 0
         self.llm_errors = 0
         self.pdf_uploads = 0
@@ -165,6 +146,9 @@ class UsageMetrics:
 
     def record_request(self):
         self.total_requests += 1
+
+    def record_question(self):
+        self.questions_asked += 1
 
     def record_session(self):
         self.total_sessions += 1
@@ -192,6 +176,7 @@ class UsageMetrics:
             "uptime_seconds": round(time.time() - self._start_time),
             "total_requests": self.total_requests,
             "total_sessions": self.total_sessions,
+            "questions asked": self.questions_asked,
             "llm_calls": self.llm_calls,
             "llm_errors": self.llm_errors,
             "pdf_uploads": self.pdf_uploads,
@@ -201,7 +186,6 @@ class UsageMetrics:
                 "avg": round(sum(samples) / len(samples), 1) if samples else 0,
                 "min": round(min(samples), 1) if samples else 0,
                 "max": round(max(samples), 1) if samples else 0,
-                "p95": round(sorted(samples)[int(len(samples) * 0.95)], 1) if len(samples) >= 20 else None,
             },
         }
 
@@ -210,7 +194,7 @@ class UsageMetrics:
 metrics = UsageMetrics()
 
 
-# ── Error reporting ───────────────────────────────────────────────────────────
+#Error reporting
 
 def report_exception(exc: Exception, context: dict = None):
     """
@@ -234,10 +218,3 @@ def report_exception(exc: Exception, context: dict = None):
         },
         exc_info=True,
     )
-
-    if _sentry_enabled:
-        with sentry_sdk.push_scope() as scope:
-            if context:
-                for k, v in context.items():
-                    scope.set_extra(k, v)
-            sentry_sdk.capture_exception(exc)

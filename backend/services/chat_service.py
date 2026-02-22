@@ -1,6 +1,4 @@
 """
-chat_service.py
-─────────────────────────────────────────────────────────────────────────────
 Core Q&A logic combining RAG (retrieval-augmented generation) with
 conversation history and intent detection.
 
@@ -27,22 +25,21 @@ import asyncio
 from openai import APITimeoutError, RateLimitError, APIError, BadRequestError
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
-
 from services.chroma_service import query_chunks, leaflet_exists
 from errors import ChatbotError, ErrorCode
 from observability import get_logger, track_latency, metrics
 
 log = get_logger("chat_service")
 
-# ── Greeting detection ────────────────────────────────────────────────────────
+# Greeting detection
 # Matches short social/conversational messages in English and Hebrew that
-# should NOT trigger the RAG pipeline.
+# should not trigger the RAG pipeline.
 _GREETING_PATTERNS = re.compile(
-    r"^\s*(hi+|hello+|hey+|good\s*(morning|afternoon|evening|day)|shalom|howdy|greetings|what'?s\s*up|thanks?|thank\s*you|bye+|goodbye+|see\s*you|great|awesome|ok+|okay|perfect|got\s*it|understood|שלום|היי+|בוקר\s*טוב|ערב\s*טוב|צהריים\s*טובים|לילה\s*טוב|תודה|תודה\s*רבה|יופי|מעולה|בסדר|אוקיי|נהדר|מצוין|כן|לא|אוקי)\W*$",
+    r"^\s*(hi+|hello+|hey+|good\s*(morning|afternoon|evening|day)|shalom|howdy|greetings|what'?s\s*up|thanks?|thank\s*you|bye+|goodbye+|see\s*you|great|awesome|ok+|okay|perfect|got\s*it|understood|שלום|היי+|בוקר\s*טוב|ערב\s*טוב|צהריים\s*טובים|לילה\s*טוב|תודה|תודה\s*רבה|יופי|מעולה|בסדר|אוקיי|נהדר|מצוין|כן|לא|אוקי|מה\s*קורה|מה\s*נשמע|מה\s*המצב|מה\s*חדש|מה\s*העניינים|מה\s*איתך|איך\s*אתה|איך\s*את|איך\s*הולך|הכל\s*בסדר)\W*$",
     re.IGNORECASE,
 )
 
-# ── System prompt (strict medical grounding) ──────────────────────────────────
+# System prompt (strict medical grounding) 
 # This prompt is re-used for every question. The {context} placeholder is
 # filled with the retrieved chunks right before the LLM call.
 MEDICAL_SYSTEM_PROMPT = """\
@@ -82,7 +79,7 @@ LEAFLET EXCERPTS (retrieved for this question):
 {context}
 """
 
-# ── Greeting system prompt ────────────────────────────────────────────────────
+# Greeting system prompt 
 GREETING_SYSTEM_PROMPT = """\
 You are a friendly medical leaflet assistant. The user has greeted you or \
 sent a short social message. Respond warmly and briefly (1-2 sentences), \
@@ -90,8 +87,7 @@ and remind them that you can answer questions about the medical leaflet \
 they uploaded. Do not provide any medical information in this response.
 """
 
-
-# ── Response parser ───────────────────────────────────────────────────────────
+# Response parser 
 
 def _parse_response(raw: str) -> dict:
     """
@@ -130,7 +126,7 @@ def _parse_response(raw: str) -> dict:
     return {"answer": answer, "citations": citations}
 
 
-# ── History builder ───────────────────────────────────────────────────────────
+# History builder
 
 def _build_history(history: list[dict]) -> list:
     """Convert stored DB message history to LangChain message objects."""
@@ -145,7 +141,7 @@ def _build_history(history: list[dict]) -> list:
     return messages
 
 
-# ── LLM factory ──────────────────────────────────────────────────────────────
+# LLM factory
 
 def _get_llm() -> ChatOpenAI:
     return ChatOpenAI(
@@ -157,7 +153,7 @@ def _get_llm() -> ChatOpenAI:
     )
 
 
-# ── OpenAI error mapper ───────────────────────────────────────────────────────
+# OpenAI error mapper 
 
 def _map_openai_error(exc: Exception) -> ChatbotError:
     """Map OpenAI SDK exceptions to our structured ChatbotError types."""
@@ -172,7 +168,7 @@ def _map_openai_error(exc: Exception) -> ChatbotError:
     return ChatbotError(ErrorCode.INTERNAL_ERROR, detail=str(exc))
 
 
-# ── Greeting handler ──────────────────────────────────────────────────────────
+# Greeting handler
 
 async def _handle_greeting(question: str) -> dict:
     """
@@ -192,7 +188,7 @@ async def _handle_greeting(question: str) -> dict:
         raise _map_openai_error(exc) from exc
 
 
-# ── Main entry point ──────────────────────────────────────────────────────────
+# Main entry point 
 
 async def answer_question(
     leaflet_id: str,
@@ -214,16 +210,16 @@ async def answer_question(
     """
     ctx = {"request_id": request_id, "leaflet_id": leaflet_id}
 
-    # ── 1. Intent: greeting or real question? ─────────────────────────────────
+    # 1. Intent: greeting or real question? 
     if _GREETING_PATTERNS.match(question.strip()):
         log.info("Greeting detected, skipping RAG", extra=ctx)
         return await _handle_greeting(question)
 
-    # ── 2. Verify leaflet is indexed ──────────────────────────────────────────
+    # 2. Verify leaflet is indexed
     if not leaflet_exists(leaflet_id):
         raise ChatbotError(ErrorCode.LEAFLET_NOT_INDEXED, detail=f"leaflet_id={leaflet_id}")
 
-    # ── 3. Expand query using history for vague follow-up questions ──────────
+    # 3. Expand query using history for vague follow-up questions 
     # Short/vague follow-ups like "tell me more" or "תוכל להסביר?" have no
     # keywords to match the leaflet. Prepend the last assistant answer so the
     # embedding search gets meaningful medical terms.
@@ -237,7 +233,7 @@ async def answer_question(
             clean = re.sub(r"<(answer|citations)>.*?</\1>", "", last_assistant, flags=re.DOTALL).strip()
             search_query = clean + "\n" + question
 
-    # ── 4. Retrieve relevant chunks ───────────────────────────────────────────
+    # 4. Retrieve relevant chunks
     with track_latency(log, "vector_search", ctx):
         relevant = query_chunks(leaflet_id, search_query, n_results=8)
 
@@ -249,7 +245,7 @@ async def answer_question(
             "is_greeting": False,
         }
 
-    # ── 4. Build context string with page + section labels ────────────────────
+    # 4. Build context string with page + section labels
     context_parts = []
     for chunk in relevant:
         label = f"[Page {chunk['page']}"
@@ -260,12 +256,12 @@ async def answer_question(
 
     context = "\n\n---\n\n".join(context_parts)
 
-    # ── 5. Build message list: system → history → current question ────────────
+    # 5. Build message list: system → history → current question
     messages = [SystemMessage(content=MEDICAL_SYSTEM_PROMPT.format(context=context))]
     messages.extend(_build_history(history))
     messages.append(HumanMessage(content=question))
 
-    # ── 6. LLM call with error handling ──────────────────────────────────────
+    # 6. LLM call with error handling
     llm = _get_llm()
     try:
         with track_latency(log, "llm_call", ctx):
@@ -275,7 +271,7 @@ async def answer_question(
         metrics.record_llm_call(success=False)
         raise _map_openai_error(exc) from exc
 
-    # ── 7. Parse and return ───────────────────────────────────────────────────
+    # 7. Parse and return
     result = _parse_response(response.content)
     result["is_greeting"] = False
 

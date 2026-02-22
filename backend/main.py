@@ -1,20 +1,5 @@
 """
-main.py
-─────────────────────────────────────────────────────────────────────────────
 Medical Leaflet Chatbot — FastAPI application entrypoint.
-
-Architecture overview:
-  ┌─────────────┐    ┌──────────────┐    ┌───────────────┐
-  │   FastAPI   │───▶│  pdf_service │───▶│ chroma_service│
-  │  (this file)│    │  (ingestion) │    │ (vector store)│
-  │             │    └──────────────┘    └───────────────┘
-  │             │    ┌──────────────┐    ┌───────────────┐
-  │             │───▶│ chat_service │───▶│  OpenAI API   │
-  │             │    │  (RAG + LLM) │    └───────────────┘
-  │             │    └──────────────┘
-  │             │    ┌──────────────┐
-  │             │───▶│  db_service  │───▶ SQLite (local)
-  └─────────────┘    └──────────────┘
 
 Request lifecycle:
   1. RequestLoggingMiddleware assigns a unique request_id and logs start/end
@@ -34,7 +19,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
-
+import traceback
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -42,7 +27,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import uvicorn
 
-load_dotenv()  # Load OPENAI_API_KEY and optional SENTRY_DSN from .env
+load_dotenv()  # Load OPENAI_API_KEY from .env
 
 from services.db_service import (
     init_db,
@@ -53,12 +38,12 @@ from services.pdf_service import process_pdf
 from services.chat_service import answer_question
 from services.chroma_service import delete_leaflet
 from errors import ChatbotError, ErrorCode
-from observability import setup_logging, get_logger, metrics, report_exception, new_request_id
+from observability import setup_logging, get_logger, metrics, new_request_id
 
 log = get_logger("main")
 
 
-# ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
+# Lifespan (startup / shutdown)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -74,7 +59,7 @@ async def lifespan(app: FastAPI):
     log.info("Medical Leaflet Chatbot shutting down")
 
 
-# ── App ───────────────────────────────────────────────────────────────────────
+# App
 
 app = FastAPI(
     title="Medical Leaflet Chatbot API",
@@ -94,7 +79,7 @@ app.add_middleware(
 )
 
 
-# ── Request logging middleware ─────────────────────────────────────────────────
+# Request logging middleware
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
@@ -140,7 +125,7 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 
-# ── Global error handlers ─────────────────────────────────────────────────────
+# Global error handlers
 
 @app.exception_handler(ChatbotError)
 async def chatbot_error_handler(request: Request, exc: ChatbotError):
@@ -173,7 +158,13 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     Returns a safe 500 with no internal details exposed to the client.
     """
     request_id = getattr(request.state, "request_id", "unknown")
-    report_exception(exc, context={"request_id": request_id, "path": request.url.path})
+    metrics.record_error(type(exc).__name__)
+    log.error(str(exc), extra={
+            "request_id": request_id,
+            "path": request.url.path,
+            "traceback": traceback.format_exc(),
+        }, exc_info=True)
+
     return JSONResponse(
         status_code=500,
         content={
@@ -185,7 +176,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-# ── Schemas ───────────────────────────────────────────────────────────────────
+# Schemas
 
 class RenameChatRequest(BaseModel):
     title: str
@@ -194,7 +185,7 @@ class AskRequest(BaseModel):
     question: str
 
 
-# ── Greeting factory ──────────────────────────────────────────────────────────
+# Greeting factory
 
 _GREETING_MESSAGE = (
     "Hello! I'm your medical leaflet assistant. I've loaded your leaflet and I'm ready to help. "
@@ -203,7 +194,7 @@ _GREETING_MESSAGE = (
 )
 
 
-# ── Chat management endpoints ─────────────────────────────────────────────────
+#Chat management endpoints
 
 @app.post("/chats", summary="Create a new chat by uploading a PDF leaflet")
 async def create_new_chat(
@@ -233,9 +224,7 @@ async def create_new_chat(
     page_count = pdf_info["page_count"]
     chat = create_chat(leaflet_id=leaflet_id, filename=file.filename, title=title)
 
-    # ── Auto-insert greeting as first assistant message ───────────────────────
-    # This gives the frontend a message to display immediately after upload,
-    # and sets a friendly tone before the user asks any questions.
+    # Auto-insert greeting as first assistant message 
     add_message(chat["id"], role="assistant", content=_GREETING_MESSAGE, citations=[])
 
     metrics.record_session()
@@ -286,7 +275,7 @@ async def remove_chat(chat_id: str):
     return {"message": f"Chat '{chat_id}' and all its messages have been deleted."}
 
 
-# ── Message endpoints ─────────────────────────────────────────────────────────
+#Message endpoints
 
 @app.get("/chats/{chat_id}/messages", summary="Get full message history for a chat")
 async def get_chat_messages(chat_id: str):
@@ -328,6 +317,7 @@ async def ask_in_chat(request: Request, chat_id: str, body: AskRequest):
     log.info(
         "Processing question",
         extra={
+            "event": "user_question",
             "request_id":   request_id,
             "chat_id":      chat_id,
             "leaflet_id":   chat["leaflet_id"],
@@ -361,7 +351,7 @@ async def ask_in_chat(request: Request, chat_id: str, body: AskRequest):
     }
 
 
-# ── Observability endpoints ───────────────────────────────────────────────────
+# Observability endpoints
 
 @app.get("/metrics", summary="Usage metrics and latency statistics")
 async def get_metrics():
@@ -378,7 +368,7 @@ async def health():
     return {"status": "ok", "version": "3.0.0"}
 
 
-# ── Entrypoint ────────────────────────────────────────────────────────────────
+# Entrypoint
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

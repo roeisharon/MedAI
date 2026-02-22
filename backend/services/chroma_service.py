@@ -1,6 +1,4 @@
 """
-chroma_service.py
-─────────────────────────────────────────────────────────────────────────────
 Vector storage layer built on ChromaDB (local persistent store).
 """
 
@@ -9,7 +7,6 @@ import re
 import chromadb
 from chromadb.config import Settings
 from langchain_openai import OpenAIEmbeddings
-
 from errors import ChatbotError, ErrorCode
 from observability import get_logger, track_latency
 
@@ -46,7 +43,7 @@ def _strip_question_words(question: str) -> str:
     return stopwords.sub('', question).strip()
 
 
-# ── Write ─────────────────────────────────────────────────────────────────────
+# Write
 
 async def store_chunks(leaflet_id: str, chunks: list[dict]):
     try:
@@ -76,7 +73,7 @@ async def store_chunks(leaflet_id: str, chunks: list[dict]):
         raise ChatbotError(ErrorCode.VECTOR_DB_ERROR, detail=str(exc)) from exc
 
 
-# ── Read ──────────────────────────────────────────────────────────────────────
+# Read
 
 def _query_single(collection, embedder, query: str, leaflet_id: str, n_results: int) -> list[dict]:
     """Run one query and return results as dicts."""
@@ -129,7 +126,7 @@ def query_chunks(leaflet_id: str, question: str, n_results: int = 8) -> list[dic
 
         ranked = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
 
-        # ── Keyword fallback ──────────────────────────────────────────────────
+        # Keyword fallback
         # If the question contains specific terms, scan ALL chunks for exact
         # matches and inject them — embedding similarity alone misses these.
         question_words = [w for w in re.findall(r'[א-ת\w]{3,}', question) if len(w) >= 3]
@@ -155,7 +152,7 @@ def query_chunks(leaflet_id: str, question: str, n_results: int = 8) -> list[dic
         raise ChatbotError(ErrorCode.VECTOR_DB_ERROR, detail=str(exc)) from exc
 
 
-# ── Existence check ───────────────────────────────────────────────────────────
+# Existence check
 
 def leaflet_exists(leaflet_id: str) -> bool:
     try:
@@ -166,7 +163,7 @@ def leaflet_exists(leaflet_id: str) -> bool:
         return False
 
 
-# ── Delete ────────────────────────────────────────────────────────────────────
+# Delete 
 
 def delete_leaflet(leaflet_id: str) -> bool:
     try:

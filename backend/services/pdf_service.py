@@ -1,6 +1,4 @@
 """
-pdf_service.py
-─────────────────────────────────────────────────────────────────────────────
 Handles PDF ingestion pipeline:
   1. Extract text per-page using pypdf (preserves page numbers)
   2. Split text into overlapping chunks using LangChain's splitter
@@ -17,7 +15,6 @@ import hashlib
 import re
 from pypdf import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-
 from services.chroma_service import store_chunks, leaflet_exists
 from errors import ChatbotError, ErrorCode
 from observability import get_logger, track_latency, metrics
@@ -29,7 +26,7 @@ CHUNK_SIZE    = 1200  # larger chunks = better context for Hebrew + complex ques
 CHUNK_OVERLAP = 200
 
 
-# ── Text extraction ───────────────────────────────────────────────────────────
+# Text extraction
 
 def _extract_pages(pdf_bytes: bytes) -> list[dict]:
     """
@@ -53,7 +50,7 @@ def _extract_pages(pdf_bytes: bytes) -> list[dict]:
     return pages
 
 
-# ── Section heading detection ─────────────────────────────────────────────────
+# Section heading detection
 
 def _detect_section(text: str) -> str | None:
     """
@@ -78,7 +75,7 @@ def _detect_section(text: str) -> str | None:
     return None
 
 
-# ── Chunking ──────────────────────────────────────────────────────────────────
+# Chunking
 
 def _chunk_pages(pages: list[dict]) -> list[dict]:
     """
@@ -128,7 +125,7 @@ def _chunk_pages(pages: list[dict]) -> list[dict]:
     return chunks
 
 
-# ── Public entry point ────────────────────────────────────────────────────────
+# Public entry point 
 
 async def process_pdf(pdf_bytes: bytes, filename: str) -> dict:
     """
@@ -138,13 +135,13 @@ async def process_pdf(pdf_bytes: bytes, filename: str) -> dict:
 
     Raises ChatbotError on validation or processing failures.
     """
-    # ── Validate ─────────────────────────────────────────────────────────────
+    # Validate 
     if not pdf_bytes:
         raise ChatbotError(ErrorCode.PDF_EMPTY)
     if len(pdf_bytes) > MAX_PDF_BYTES:
         raise ChatbotError(ErrorCode.PDF_TOO_LARGE, detail=f"Size: {len(pdf_bytes)} bytes")
 
-    # ── Stable ID via content hash ────────────────────────────────────────────
+    # Stable ID via content hash 
     leaflet_id = hashlib.sha256(pdf_bytes).hexdigest()[:16]
 
     # Always get page count regardless of whether already indexed
@@ -157,7 +154,7 @@ async def process_pdf(pdf_bytes: bytes, filename: str) -> dict:
 
     log.info("Starting PDF ingestion", extra={"leaflet_id": leaflet_id, "pdf_filename": filename})
 
-    # ── Extract → chunk → store ───────────────────────────────────────────────
+    # Extract → chunk → store
     with track_latency(log, "pdf_extract", {"leaflet_id": leaflet_id}):
         pages = _extract_pages(pdf_bytes)
 

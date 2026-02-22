@@ -10,8 +10,11 @@ export default function ChatInput({ input, setInput, onSend, loading }) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onSend()}
           placeholder="Ask about your medication..."
-          className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
+          className="flex-1 bg-transparent text-base sm:text-sm text-gray-800 placeholder-gray-400 outline-none"
           disabled={loading}
+            inputMode="text"
+            autoComplete="off"
+            autoCorrect="off"
         />
         <button
           onClick={onSend}

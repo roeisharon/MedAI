@@ -119,7 +119,9 @@ export default function Chat({ initialChat = null, onChatCreated }) {
   // ── Chat screen ───────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      <ChatHeader fileName={fileName} pageCount={pageCount} />
+      <div className="shrink-0 sticky top-0 z-20 bg-white border-b border-gray-100">
+        <ChatHeader fileName={fileName} pageCount={pageCount} />
+      </div>
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 flex flex-col gap-4">
 

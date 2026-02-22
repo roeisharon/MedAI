@@ -1,7 +1,7 @@
 services:
   backend:
     build: ./backend
-    container_name: docbot_backend
+    container_name: medai_backend
     ports:
       - "8000:8000"      # also exposed directly for Swagger UI access
     volumes:
@@ -18,7 +18,7 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: docbot_frontend
+    container_name: medai_frontend
     ports:
       - "80:80"
     depends_on:

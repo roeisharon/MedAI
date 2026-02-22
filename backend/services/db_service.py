@@ -1,6 +1,4 @@
 """
-db_service.py
-─────────────────────────────────────────────────────────────────────────────
 SQLite persistence layer for chats and messages.
 
 Schema:
@@ -25,7 +23,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Optional
-
 from observability import get_logger
 
 log = get_logger("db_service")
@@ -92,7 +89,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-# ── Chats ─────────────────────────────────────────────────────────────────────
+# Chats
 
 def create_chat(leaflet_id: str, filename: str, title: Optional[str] = None) -> dict:
     """Insert a new chat row. Title defaults to the filename."""
@@ -145,7 +142,7 @@ def _touch_chat(chat_id: str, conn):
     conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (_now(), chat_id))
 
 
-# ── Messages ──────────────────────────────────────────────────────────────────
+# Messages
 
 def add_message(
     chat_id: str,

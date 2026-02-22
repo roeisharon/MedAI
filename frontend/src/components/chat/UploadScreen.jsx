@@ -40,7 +40,7 @@ export default function UploadScreen({ onChatCreated }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 py-8">
       <div
         className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
         style={{ background: "linear-gradient(135deg, #eff6ff 0%, #f0fdf9 50%, #e0f2fe 100%)" }}
@@ -48,7 +48,7 @@ export default function UploadScreen({ onChatCreated }) {
         <LuSparkles className="w-7 h-7 text-blue-600" />
       </div>
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Medical Leaflet Assistant</h1>
+      <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 text-center">Medical Leaflet Assistant</h1>
       <p className="text-sm text-gray-500 text-center max-w-xs mb-8">
         Upload a medical leaflet to get accurate, grounded answers about your medication.
       </p>
@@ -58,7 +58,7 @@ export default function UploadScreen({ onChatCreated }) {
         onDrop={handleDrop}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        className={`w-full max-w-full sm:max-w-md border-2 border-dashed rounded-2xl px-8 py-10 flex flex-col items-center justify-center transition-colors
+        className={`w-full max-w-full sm:max-w-md border-2 border-dashed rounded-2xl px-4 sm:px-8 py-8 sm:py-10 flex flex-col items-center justify-center transition-colors
           ${dragOver  ? "border-blue-400 bg-blue-50" : "border-gray-200"}
           ${uploading ? "cursor-default" : "cursor-pointer hover:border-blue-300 hover:bg-blue-50/40"}`}
       >

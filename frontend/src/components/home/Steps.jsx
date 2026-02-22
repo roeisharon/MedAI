@@ -20,7 +20,7 @@ const steps = [
 
 export default function Steps() {
   return (
-    <section className="bg-stone-100/20 px-6 py-20">
+    <section className="bg-white px-6 py-20">
       <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
         Get Started in 3 Steps
       </h2>

@@ -6,7 +6,7 @@ import Disclaimer from "../components/home/Disclaimer";
 export default function Home() {
   return (
     <>
-      <Hero />
+      <Hero/>
       <Features />
       <Steps />
       <Disclaimer />
