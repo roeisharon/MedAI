@@ -37,7 +37,7 @@ def _get_embedder():
 def _strip_question_words(question: str) -> str:
     """Strip Hebrew question words to get the core topic."""
     stopwords = re.compile(
-        r'\b(מה|מהם|מהן|איך|כיצד|מתי|היכן|למה|מדוע|האם|זה|זו|הם|הן|של|עם|על|את|לי|לנו|לך|הוא|היא)\b',
+        r'\b(מה|מהם|מהן|איך|כיצד|מתי|היכן|למה|מדוע|האם|זה|זו|הם|הן|של|עם|על|את|לי|לנו|לך|הוא|היא|שלושת|כמה|איזה|איזו|אילו)\b',
         re.UNICODE
     )
     return stopwords.sub('', question).strip()
@@ -127,12 +127,12 @@ def query_chunks(leaflet_id: str, question: str, n_results: int = 12) -> list[di
         ranked = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
 
         # Keyword fallback
-        # If the question contains specific terms, scan ALL chunks for exact
-        # matches and inject them — embedding similarity alone misses these.
-        # also generate hebrew prefix variants
+        # Strip punctuation first so "לימפוציטים?" matches "לימפוציטים"
+        clean_question = re.sub(r'[?!.,;:״\'"()]', ' ', question)
+        question_words = [w for w in re.findall(r'[א-ת\w]{3,}', clean_question) if len(w) >= 3]
 
-        question_words = [w for w in re.findall(r'[א-ת\w]{3,}', question) if len(w) >= 3]
-        hebrew_prefixes = ['ה', 'ו', 'ב', 'ל', 'מ', 'כ', 'ש', 'ו', 'מה', 'של', 'על']
+        # Generate Hebrew prefix variants to handle morphology
+        hebrew_prefixes = ['ה', 'ו', 'ב', 'ל', 'מ', 'כ', 'ש', 'מה', 'של', 'על']
         expanded_words = set(question_words)
         for word in question_words:
             for prefix in hebrew_prefixes:
@@ -147,12 +147,13 @@ def query_chunks(leaflet_id: str, question: str, n_results: int = 12) -> list[di
                 include=["documents", "metadatas"],
             )
             for doc, meta in zip(all_chunks["documents"], all_chunks["metadatas"]):
-                if any(word in doc for word in question_words) and doc not in seen:
+                # FIX: use expanded_words (not question_words) to match prefixed forms
+                if any(word in doc for word in expanded_words) and doc not in seen:
                     ranked.append({
                         "text":    doc,
                         "page":    meta.get("page", "?"),
                         "section": meta.get("section") or None,
-                        "score":   0.3,  # injected via keyword match
+                        "score":   0.3,
                     })
 
         return ranked[:n_results]
@@ -174,7 +175,7 @@ def leaflet_exists(leaflet_id: str) -> bool:
         return False
 
 
-# Delete 
+# Delete
 
 def delete_leaflet(leaflet_id: str) -> bool:
     try:
