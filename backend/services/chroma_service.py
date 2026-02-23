@@ -34,13 +34,15 @@ def _get_embedder():
     )
 
 
-def _strip_question_words(question: str) -> str:
-    """Strip Hebrew question words to get the core topic."""
-    stopwords = re.compile(
-        r'\b(מה|מהם|מהן|איך|כיצד|מתי|היכן|למה|מדוע|האם|זה|זו|הם|הן|של|עם|על|את|לי|לנו|לך|הוא|היא|שלושת|כמה|איזה|איזו|אילו)\b',
-        re.UNICODE
-    )
-    return stopwords.sub('', question).strip()
+# Hebrew question/filler words to strip before keyword embedding search
+_HEBREW_STOPWORDS = re.compile(
+    r'\b(מה|מהם|מהן|איך|כיצד|מתי|היכן|למה|מדוע|האם|זה|זו|הם|הן|של|עם|על|את|לי|לנו|לך|הוא|היא|כמה|איזה|איזו|אילו|תסביר|תגיד|ספר|פרט|הסבר|לי|על)\b',
+    re.UNICODE
+)
+
+def _strip_stopwords(question: str) -> str:
+    clean = re.sub(r'[?!.,;:״\'"()]', ' ', question)
+    return _HEBREW_STOPWORDS.sub('', clean).strip()
 
 
 # Write
@@ -73,10 +75,9 @@ async def store_chunks(leaflet_id: str, chunks: list[dict]):
         raise ChatbotError(ErrorCode.VECTOR_DB_ERROR, detail=str(exc)) from exc
 
 
-# Read
+# Read 
 
 def _query_single(collection, embedder, query: str, leaflet_id: str, n_results: int) -> list[dict]:
-    """Run one query and return results as dicts."""
     emb = embedder.embed_query(query)
     results = collection.query(
         query_embeddings=[emb],
@@ -101,24 +102,20 @@ def _query_single(collection, embedder, query: str, leaflet_id: str, n_results: 
     ]
 
 
-def query_chunks(leaflet_id: str, question: str, n_results: int = 12) -> list[dict]:
-    """
-    Multi-query retrieval: searches with the original question AND a
-    keyword-stripped variant, merges and deduplicates by best score.
-    """
+def query_chunks(leaflet_id: str, question: str, n_results: int = 20) -> list[dict]:
     try:
         collection = _get_collection()
         embedder   = _get_embedder()
 
         seen: dict[str, dict] = {}
 
-        # Query 1: original question
+        # Query 1: original question as-is
         for r in _query_single(collection, embedder, question, leaflet_id, n_results):
             if r["text"] not in seen or r["score"] > seen[r["text"]]["score"]:
                 seen[r["text"]] = r
 
-        # Query 2: keyword-only variant (helps with Hebrew question phrasing)
-        keywords = _strip_question_words(question)
+        # Query 2: keywords only (strip stopwords + punctuation)
+        keywords = _strip_stopwords(question)
         if keywords and keywords != question:
             for r in _query_single(collection, embedder, keywords, leaflet_id, n_results):
                 if r["text"] not in seen or r["score"] > seen[r["text"]]["score"]:
@@ -126,18 +123,20 @@ def query_chunks(leaflet_id: str, question: str, n_results: int = 12) -> list[di
 
         ranked = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
 
-        # Keyword fallback
-        # Strip punctuation first so "לימפוציטים?" matches "לימפוציטים"
-        clean_question = re.sub(r'[?!.,;:״\'"()]', ' ', question)
-        question_words = [w for w in re.findall(r'[א-ת\w]{3,}', clean_question) if len(w) >= 3]
+        # Keyword fallback (exact + morphological variants)
+        # Handles cases where embedding similarity misses due to Hebrew prefixes
 
-        # Generate Hebrew prefix variants to handle morphology
+        clean_q = re.sub(r'[?!.,;:״\'"()]', ' ', question)
+        question_words = [w for w in re.findall(r'[א-ת\w]{3,}', clean_q) if len(w) >= 3]
+
         hebrew_prefixes = ['ה', 'ו', 'ב', 'ל', 'מ', 'כ', 'ש', 'מה', 'של', 'על']
         expanded_words = set(question_words)
         for word in question_words:
+            # strip prefix → root
             for prefix in hebrew_prefixes:
                 if word.startswith(prefix) and len(word) - len(prefix) >= 3:
                     expanded_words.add(word[len(prefix):])
+            # add prefixed variants
             for prefix in hebrew_prefixes:
                 expanded_words.add(prefix + word)
 
@@ -147,7 +146,6 @@ def query_chunks(leaflet_id: str, question: str, n_results: int = 12) -> list[di
                 include=["documents", "metadatas"],
             )
             for doc, meta in zip(all_chunks["documents"], all_chunks["metadatas"]):
-                # FIX: use expanded_words (not question_words) to match prefixed forms
                 if any(word in doc for word in expanded_words) and doc not in seen:
                     ranked.append({
                         "text":    doc,
@@ -164,7 +162,7 @@ def query_chunks(leaflet_id: str, question: str, n_results: int = 12) -> list[di
         raise ChatbotError(ErrorCode.VECTOR_DB_ERROR, detail=str(exc)) from exc
 
 
-# Existence check
+# Existence check 
 
 def leaflet_exists(leaflet_id: str) -> bool:
     try:

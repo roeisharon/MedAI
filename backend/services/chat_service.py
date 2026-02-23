@@ -55,14 +55,18 @@ STRICT RULES:
 4. Do NOT add external medical knowledge beyond what is in the leaflet.
 5. You may use conversation history to understand follow-up questions,
    but factual answers must be grounded only in the leaflet excerpts.
-6. Be concise and accurate. Do not speculate or extrapolate.
-7. ALWAYS output citations. Even if the answer seems obvious, you MUST include
-   verbatim quotes from the excerpts that support it. Never omit the citations block.
-   Each citation MUST include the page number and section if available.
+6. Be concise and accurate. Do not speculate or extrapolate. Answer only what was asked, nothing more.
+7. Do NOT add any polite closing phrases, introductions, or extra commentary. Answer directly.
+8. ALWAYS output citations — this is MANDATORY for every single response without exception.
+   You MUST include verbatim quotes from the excerpts that support your answer.
+   Never omit the citations block, even for simple or obvious answers.
+   Each citation MUST be a direct quote from the excerpts, with page number.
+   If you cannot find a supporting quote, use the closest relevant text from the excerpts as one.
+9. NEVER include citations or page references inside the <answer> text. All citations MUST be in the <citations> block only.
 
 OUTPUT FORMAT - you MUST always use these exact XML tags, no exceptions:
 <answer>
-[Your answer here]
+[Your answer here - NO inline citations, NO (page X), no citations inside the answer text.]
 </answer>
 <citations>
 [
@@ -71,8 +75,45 @@ OUTPUT FORMAT - you MUST always use these exact XML tags, no exceptions:
 ]
 </citations>
 
+CRITICAL FORMATTING RULES:
+- The <answer> block must contain ONLY the answer text — no citations, no page references, no "(עמוד X)", no "ציטוט:"
+- All citations go EXCLUSIVELY in the <citations> JSON array
+- Do NOT write citations inline in the answer text
+- Do NOT write (עמוד X) inside the answer
+- Do NOT write "ציטוט:" or "מקורות:" inside the answer
+
+EXAMPLE of correct output:
+<answer>
+Some medical information based on the leaflet content.
+</answer>
+<citations>
+[
+  {{"text": "Exact citation from leaflet", "page": 6, "section": "example section"}},
+  {{"text": "Another relevant quote", "page": 2, "section": null}}
+]
+</citations>
+
+EXAMPLE of WRONG output (never do this):
+<answer>
+Some medical information based on the leaflet content. As stated on page 6, 'Exact citation from leaflet'.
+</answer>
+
 Even for follow-up or clarification questions, always output both <answer> and <citations> tags.
 If truly no relevant information is found: <answer>This information is not available in the provided leaflet.</answer><citations>[]</citations>
+
+IMPORTANT REMINDER: Citations are MANDATORY for EVERY answer. If you provide an answer, you MUST include at least one citation from the excerpts in the <citations> block. Do not skip this step.
+CRITICAL: NEVER put citations or quotes inside the <answer> text. All citations MUST be in the <citations> block ONLY. If you put quotes in the answer, the response will be invalid and rejected.
+
+Repeat the output format:
+<answer>
+[Your answer here - NO inline citations, NO quotes, no page references.]
+</answer>
+<citations>
+[
+  {{"text": "exact verbatim quote from leaflet", "page": 3, "section": "Side Effects"}},
+  {{"text": "another exact quote", "page": 1, "section": null}}
+]
+</citations>
 
 ---
 LEAFLET EXCERPTS (retrieved for this question):
@@ -89,10 +130,11 @@ they uploaded. Do not provide any medical information in this response.
 
 # Response parser 
 
-def _parse_response(raw: str) -> dict:
+def _parse_response(raw: str, context: str = "") -> dict:
     """
     Extract <answer> and <citations> from the structured LLM output.
     Falls back gracefully if the model doesn't follow the format perfectly.
+    If no citations block, extract inline quotes from answer and match to context for pages.
     """
     answer, citations = "", []
 
@@ -125,6 +167,42 @@ def _parse_response(raw: str) -> dict:
     
     # safety strip
     answer = re.sub(r"</?(answer|citations)>", "", answer).strip()
+
+    # Post-process: remove any inline citations from answer (e.g., (עמוד X))
+    answer = re.sub(r'\s*\(עמוד\s*\d+\)', '', answer).strip()
+    answer = re.sub(r'\s*\(page\s*\d+\)', '', answer, re.IGNORECASE).strip()
+
+    # Fallback: if no citations from block, extract inline quotes from answer
+    if not citations and context:
+        # Find quoted strings in answer, e.g., "text"
+        inline_quotes = re.findall(r'"([^"]*)"', answer)
+        for quote in inline_quotes[:3]:  # Limit to 3
+            # Find the best matching chunk in context based on word overlap
+            lines = context.split('\n\n---\n\n')
+            best_match = None
+            best_score = 0
+            quote_words = set(re.findall(r'\w+', quote))  # Split into words
+            for line in lines:
+                # Extract text part after the label
+                parts = line.split('\n', 1)
+                if len(parts) > 1:
+                    text_part = parts[1]
+                else:
+                    text_part = line
+                chunk_words = set(re.findall(r'\w+', text_part))
+                overlap = len(quote_words & chunk_words)
+                if overlap > best_score:
+                    best_score = overlap
+                    best_match = line
+            # If good overlap (e.g., >50% of quote words), use it
+            if best_match and best_score > len(quote_words) * 0.5:
+                page_match = re.search(r'\[Page (\d+)', best_match)
+                page = page_match.group(1) if page_match else None
+                section_match = re.search(r'— ([^\]]+)', best_match)
+                section = section_match.group(1) if section_match else None
+                citations.append({"text": quote, "page": page, "section": section})
+                # Remove the quote from answer
+                answer = answer.replace(f'"{quote}"', '').strip()
 
     return {"answer": answer, "citations": citations}
 
@@ -227,18 +305,10 @@ async def answer_question(
     # keywords to match the leaflet. Prepend the last assistant answer so the
     # embedding search gets meaningful medical terms.
     search_query = question
-    if history and len(question.strip()) < 60:
-        last_assistant = next(
-            (m["content"] for m in reversed(history) if m["role"] == "assistant"),
-            None,
-        )
-        if last_assistant:
-            clean = re.sub(r"<(answer|citations)>.*?</\1>", "", last_assistant, flags=re.DOTALL).strip()
-            search_query = clean + "\n" + question
 
     # 4. Retrieve relevant chunks
     with track_latency(log, "vector_search", ctx):
-        relevant = query_chunks(leaflet_id, search_query, n_results=12)
+        relevant = query_chunks(leaflet_id, search_query, n_results=20)
 
     if not relevant:
         log.info("No relevant chunks found", extra=ctx)
@@ -250,7 +320,7 @@ async def answer_question(
 
     # 4. Build context string with page + section labels
     context_parts = []
-    for chunk in relevant:
+    for chunk in relevant[:10]:  # Limit to top 10 to avoid context overflow
         label = f"[Page {chunk['page']}"
         if chunk.get("section"):
             label += f" — {chunk['section']}"
@@ -275,8 +345,11 @@ async def answer_question(
         raise _map_openai_error(exc) from exc
 
     # 7. Parse and return
-    result = _parse_response(response.content)
+    result = _parse_response(response.content, context)
     result["is_greeting"] = False
+
+    # Log raw response for debugging citations
+    log.info("LLM raw response", extra={"raw_response": response.content[:500]})  # Truncate for log
 
     log.info(
         "Answer generated",
